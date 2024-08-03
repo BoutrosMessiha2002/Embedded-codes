@@ -1,0 +1,23 @@
+/*
+ * HMI_ECU.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef HMI_ECU_H_
+#define HMI_ECU_H_
+#define CONTROL_READY 0x0A
+#define HMI_READY 0x0B
+#define OPEN_DOOR 0x0C
+#define CHANGE_PASS 0x0D
+void HMI_createPass(void);
+void HMI_displayOpt(void);
+void HMI_readyToRecieve(void);
+void HMI_readyToSend(uint8 sel);
+void HMI_enterPassAfterOpt1(void);
+void HMI_enterPassAfterOpt2(void);
+void HMI_motorDoor(void);
+
+
+#endif /* HMI_ECU_H_ */

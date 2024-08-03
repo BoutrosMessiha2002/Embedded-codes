@@ -1,0 +1,10 @@
+/*
+ * timer1.c
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+#include"timer1.h"
+static volatile void (*g_callBackPtr)(void) = NULL_PTR;
+
+

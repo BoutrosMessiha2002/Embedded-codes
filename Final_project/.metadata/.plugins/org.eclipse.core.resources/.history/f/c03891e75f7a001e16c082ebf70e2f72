@@ -1,0 +1,15 @@
+/*
+ * HMI_ECU.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef HMI_ECU_H_
+#define HMI_ECU_H_
+void HMI_createPass(void);
+void HMI_displayOpt(void);
+void HMI_readyToRecieve(void);
+
+
+#endif /* HMI_ECU_H_ */

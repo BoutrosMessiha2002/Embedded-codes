@@ -1,0 +1,18 @@
+/*
+ * CONTROL_ECU.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef CONTROL_ECU_H_
+#define CONTROL_ECU_H_
+#define CONTROL_READY 0x0A
+void CONTROL_openDoor(void);
+void CONTROL_changePass(void);
+void CONTROL_changePass(void);
+void CONTROL_readyToRecieve(void);
+void CONTROL_alertUser(void);
+
+
+#endif /* CONTROL_ECU_H_ */

@@ -1,0 +1,24 @@
+/*
+ * CONTROL_ECU.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef CONTROL_ECU_H_
+#define CONTROL_ECU_H_
+#include"std_types.h"
+#define CONTROL_READY 0x0A
+#define HMI_READY 0x0B
+#define CREATE_PASS 0x0C
+#define OPEN_DOOR 0x0D
+#define CHANGE_PASS 0x0E
+void CONTROL_openDoor(void);
+void CONTROL_changePass(void);
+void CONTROL_Selection(uint8 sel);
+uint8 CONTROL_readyToRecieve(void);
+void CONTROL_readyToSend(uint8 status);
+void CONTROL_alertUser(void);
+
+
+#endif /* CONTROL_ECU_H_ */

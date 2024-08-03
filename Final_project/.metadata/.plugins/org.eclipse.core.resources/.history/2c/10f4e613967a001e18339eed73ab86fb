@@ -1,0 +1,10 @@
+/*
+ * timer1.c
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+#include"timer1.h"
+void TIMER1_init(const Timer1_ConfigType * Config_Ptr)
+
+

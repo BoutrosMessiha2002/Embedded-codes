@@ -1,0 +1,235 @@
+/*
+ * CONTROL_ECU.c
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros Messiha
+ */
+//Final project: Door lock security system
+//CONTROL_MCU description
+#include<avr/io.h>
+#include"motor.h"
+#include"uart.h"
+#include"twi.h"
+#include"CONTROL_ECU.h"
+#include"external_eeprom.h"
+#include"timer1.h"
+#include"buzzer.h"
+#include<util/delay.h>
+uint8 sel;//selection sent from HMI to CONTROL to choose the operation needed to be executed
+uint8 count=0;//count for counting time when an interrupt is triggered by timer 1
+static uint8 pass1[5];//first password in startup
+static uint8 pass2[5];//Confirmed password after startup
+uint8 check_pass[5];//Password needed to be checked when chosen to open door or change pass
+uint8 status;//Status to be Sent through UART to indicate if passwords match or not, POSITIVE for match and FAIL for mismatch
+#define address 0x0000//First address of EEPROM
+
+/*
+ * Function description: it describes the process of handshake between the two microcontrollers, while the
+ * HMI MCU is in polling waiting to receive the status, It sends a byte called CONTROL_READY to signal the
+ * HMI MCU that it is ready to send, in return, HMI sends a message, HMI_READY to order it to send the status
+ * as it is ready to receive.
+ */
+
+void CONTROL_readyToSend(uint8 status)
+{
+	UART_sendByte(CONTROL_READY);
+	while(UART_recieveByte()!=HMI_READY);
+	UART_sendByte(status);
+}
+
+/*
+ * Function description: it describes the inverse process of the first function as it first waits for
+ * HMI_READY then signals the HMI MCU that it is ready to receive the byte which will be the operation selected
+ * to be executed.
+ */
+
+uint8 CONTROL_readyToRecieve(void)
+{
+	while(UART_recieveByte()!=HMI_READY);
+	UART_sendByte(CONTROL_READY);
+	return UART_recieveByte();
+}
+/*
+ * Function description: it is the function that it is continuously executed in while(1) in the main function
+ * it always waits for the selection from HMI_MCU and when the HMI_MCU signals that it is ready to send
+ * a command, the CONTROL MCU enters a polling state waiting for the HMI MCU to send the selected
+ * operation and then when sent, it executes the operation based on the command sent.
+ * Look in header files for the BYTES of each command/
+ */
+void CONTROL_Selection(void)
+{
+	sel=CONTROL_readyToRecieve();
+	if (sel==CREATE_PASS)
+		CONTROL_createPass();
+	else if(sel==CREATE_PASS2)
+		CONTROL_createPass2();
+	else if(sel==OPEN_DOOR_CHECK_PASS)
+		CONTROL_openDoorCheckPass();
+	else if(sel==CHANGE_PASS)
+		CONTROL_changePass();
+	else if(sel==OPENING_DOOR)
+		CONTROL_doorOpening();
+	else if(sel==ALERT)
+		CONTROL_alertUser();
+	else if(sel==ALARM)
+		CONTROL_alarm();
+
+}
+/*
+ * Function description: It receives the first password after startup by UART.
+ */
+void CONTROL_createPass(void)
+{
+    for(uint8 i=0;i<5;i++)
+    {
+    pass1[i]=UART_recieveByte();
+    }
+
+}
+/*
+ * Function description: It receives the confirmed password after startup by UART.
+ */
+void CONTROL_createPass2(void)
+{
+	for(uint8 i=0;i<5;i++)
+	{
+		pass2[i]=UART_recieveByte();
+	}
+	CONTROL_registerPass(pass1,pass2);
+}
+/*
+ * Function description: it checks the similarity between two passwords, if matched, then the MCU stores
+ * the password in the EEPROM and sends the status POSITIVE, if the passwords are unmatched, it sends FAIL
+ */
+void CONTROL_registerPass(uint8*pass1,uint8*pass2)
+{
+    status=POSITIVE;
+	for(uint8 j=0;j<5;j++)
+		if(pass1[j]!=pass2[j])
+			status=FAIL;
+	if(status==POSITIVE)
+	for(uint8 j=0;j<5;j++)
+	{
+		EEPROM_writeByte(address+j, pass1[j]);
+		_delay_ms(10);
+	}
+    CONTROL_readyToSend(status);
+}
+/*
+ * Function description:it receives the password before opening the door and then goes to CONTROL_checkPass
+ * below to compare it with the one stored in EEPROM after startup to see if they match
+ */
+void CONTROL_openDoorCheckPass(void)
+{
+for(uint8 j=0;j<5;j++)
+{
+	check_pass[j]=UART_recieveByte();
+}
+CONTROL_checkPass(check_pass);
+}
+/*
+ * Function description: it checks the password given by the HMI MCU with the one stored in the EEPROM.
+ * If they are matched, it sends POSITIVE, else it sends FAIL.
+ */
+void CONTROL_checkPass(uint8*check_pass)
+{
+	uint8 value;
+	status=POSITIVE;
+	for(uint8 j=0;j<5;j++)
+	{
+		EEPROM_readByte(address+j,&value);
+		_delay_ms(10);
+			if(value!=check_pass[j])
+				status=FAIL;
+	}
+	CONTROL_readyToSend(status);
+}
+/*
+ * Function description: similar to CONTORL_openDoorCheckPass but for the other operation which is
+ * to change the password.
+ */
+void CONTROL_changePass(void)
+{
+	for(uint8 j=0;j<5;j++)
+	{
+		check_pass[j]=UART_recieveByte();
+	}
+	CONTROL_checkPass(check_pass);
+}
+/*
+ * Function description: this function is the brain of the project as it initializes the timer and controls
+ * the motor if the passwords are matched, in this case I configured the timer1 as compare mode with
+ * prescaler 256 and access the count time function using the callback technique.
+ * This function rotates the motor CW for 15 seconds(opening), stops for 3 seconds and then
+ * rotates ACW for 15 seconds(closing)
+ */
+void CONTROL_doorOpening(void)
+{
+  Timer1_ConfigType TIMER1_Config={0,31250,PS_256,CTC};
+  TIMER1_init(&TIMER1_Config);
+  TIMER1_setCallBack(CONTROL_countTime);
+  while(count!=15)
+	  DcMotor_Rotate(ACW,100);
+   count=0;
+   while(count!=3)
+   {
+	  DcMotor_Rotate(OFF,0);
+   }
+   count=0;
+   while(count!=15)
+   {
+    DcMotor_Rotate(CW,100);
+   }
+   count=0;
+   TIMER1_deInit();
+   DcMotor_Rotate(OFF,0);
+}
+/*
+ * Function description: same as open door and change pass but for alerting the user that it entered
+ * a wrong password.
+ */
+void CONTROL_alertUser(void)
+{
+	for(uint8 j=0;j<5;j++)
+	{
+		check_pass[j]=UART_recieveByte();
+	}
+	CONTROL_checkPass(check_pass);
+}
+/*
+ * Function description: it is the alarm state where it counts 60 seconds and activate the buzzer to signal
+ * that passwords have been incorrectly entered 3 times in a row.
+ */
+void CONTROL_alarm(void)
+{
+	Timer1_ConfigType TIMER1_Config={0,31250,PS_256,CTC};
+	  TIMER1_init(&TIMER1_Config);
+	  TIMER1_setCallBack(CONTROL_countTime);
+	  while(count!=60)
+		  BUZZER_on();
+	  BUZZER_off();
+	  TIMER1_deInit();
+	   count=0;
+}
+/*Function description: it is the function that counts time and it is called by the call back technique
+ * each time an interrupt is triggered by the timer1.
+ */
+void CONTROL_countTime(void)
+{
+	count++;
+}
+int main()
+{
+	SREG|=(1<<7); //Enable global interrupt I-bit
+	UART_ConfigType UART_Config={EIGHT_BIT,DISABLED,ONE_BIT,BR_9600};//Configuration structure for UART with 9600 baud rate.
+	UART_init(&UART_Config);
+	TWI_ConfigType TWI_Config={0b00000010,0x20};//configuration structure for I2C, address and bit rate configuration.
+	TWI_init(&TWI_Config);
+	DcMotor_init();//Initialize motor driver
+	BUZZER_init();//initialize buzzer driver
+	while(1)
+	{
+	CONTROL_Selection();
+	}
+}
+

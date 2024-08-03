@@ -1,0 +1,225 @@
+/*
+ * HMI_ECU.c
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+#include"lcd.h"
+#include"uart.h"
+#include"keypad.h"
+#include"HMI_ECU.h"
+#include"timer1.h"
+#include<avr/io.h>
+#include<util/delay.h>
+uint8 pass1[5];
+uint8 pass2[5];
+uint8 status;
+uint8 trial=0;
+uint8 count=0;
+uint8 alert_count=0;
+void HMI_createPass()
+{
+	_delay_ms(300);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	LCD_displayString("plz enter pass: ");
+	LCD_moveCursor(1,0);
+	HMI_readyToSend(CREATE_PASS);
+	for(uint8 i=0;i<5;i++)
+	{
+		UART_sendByte(KEYPAD_getPressedKey());
+		LCD_displayCharacter('*');
+		_delay_ms(300);
+	}
+	while(KEYPAD_getPressedKey()!='=');
+	_delay_ms(300);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	LCD_displayString("plz re-enter the");
+	LCD_moveCursor(1,0);
+	LCD_displayString("same pass: ");
+	HMI_readyToSend(CREATE_PASS2);
+	for(uint8 i=0;i<5;i++)
+		{
+			UART_sendByte(KEYPAD_getPressedKey());
+			LCD_displayCharacter('*');
+			_delay_ms(400);
+		}
+	while(KEYPAD_getPressedKey()!='=');
+	_delay_ms(300);
+	LCD_clearScreen();
+	status=HMI_readyToRecieve();
+	if(status==SUCCES)
+		 HMI_displayOpt();
+	else if(status==FAIL)
+		 HMI_createPass();
+}
+void HMI_displayOpt()
+{
+	_delay_ms(300);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	LCD_displayString("+:Open door");
+	LCD_moveCursor(1,0);
+	LCD_displayString("-:Change pass");
+	uint8 num=KEYPAD_getPressedKey();
+	if(num=='+')
+	 HMI_enterPassAfterOpt1();
+	 else if(num=='-')
+     HMI_enterPassAfterOpt2();
+}
+void HMI_enterPassAfterOpt1()
+{
+	_delay_ms(300);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+		LCD_displayString("plz enter pass: ");
+		LCD_moveCursor(1,0);
+		HMI_readyToSend(OPEN_DOOR);
+			for(uint8 i=0;i<5;i++)
+			{
+				UART_sendByte(KEYPAD_getPressedKey());
+				LCD_displayCharacter('*');
+				_delay_ms(400);
+
+			}
+		while(KEYPAD_getPressedKey()!='=');
+		LCD_clearScreen();
+		status=HMI_readyToRecieve();
+		if(status==SUCCES)
+		HMI_openingDoor();
+		else if(status==FAIL)
+		{
+		alert_count++;
+		HMI_alertUser();
+		}
+}
+void HMI_readyToSend(uint8 sel)
+{
+	UART_sendByte(HMI_READY);
+	while(UART_recieveByte()!=CONTROL_READY);
+	UART_sendByte(sel);
+}
+uint8 HMI_readyToRecieve(void)
+{
+	while(UART_recieveByte()!=CONTROL_READY);
+	UART_sendByte(HMI_READY);
+	return UART_recieveByte();
+}
+void HMI_enterPassAfterOpt2()
+{
+	_delay_ms(300);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	LCD_displayString("plz enter pass: ");
+	LCD_moveCursor(1,0);
+	HMI_readyToSend(CHANGE_PASS);
+	for(uint8 i=0;i<5;i++)
+				{
+					UART_sendByte(KEYPAD_getPressedKey());
+					LCD_displayCharacter('*');
+					_delay_ms(400);
+				}
+			while(KEYPAD_getPressedKey()!='=');
+	LCD_clearScreen();
+			status=HMI_readyToRecieve();
+			if(status==SUCCES)
+				HMI_createPass();
+			else if(status==FAIL)
+			{
+				alert_count++;
+				HMI_alertUser();
+			}
+}
+void HMI_alertUser(void)
+{
+	_delay_ms(300);
+	if(alert_count==3)
+	{
+		alert_count=0;
+		HMI_alarm();
+	}
+		LCD_clearScreen();
+		LCD_moveCursor(0,0);
+		LCD_displayString("plz enter pass: ");
+		LCD_moveCursor(1,0);
+		HMI_readyToSend(ALERT);
+		for(uint8 i=0;i<5;i++)
+						{
+							UART_sendByte(KEYPAD_getPressedKey());
+							LCD_displayCharacter('*');
+							_delay_ms(400);
+						}
+					while(KEYPAD_getPressedKey()!='=');
+			LCD_clearScreen();
+					status=HMI_readyToRecieve();
+					if(status==SUCCES)
+						HMI_displayOpt();
+					else if(status==FAIL)
+					{
+						alert_count++;
+						HMI_alertUser();
+					}
+}
+void HMI_openingDoor(void)
+{
+	HMI_readyToSend(OPENING_DOOR);
+	Timer1_ConfigType TIMER1_Config={0,31250,PS_256,CTC};
+	TIMER1_init(&TIMER1_Config);
+	TIMER1_setCallBack(HMI_countTime);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	while(count!=15)
+	{
+		LCD_displayString("Door is unlocking");
+		LCD_moveCursor(0,0);
+	}
+	count=0;
+	while(count!=3);
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	count=0;
+	while(count!=15)
+	{
+		LCD_displayString("Door is Locking");
+		LCD_moveCursor(0,0);
+	}
+	LCD_clearScreen();
+	TIMER1_deInit();
+	count=0;
+	HMI_displayOpt();
+}
+void HMI_alarm(void)
+{
+	HMI_readyToSend(ALARM);
+	Timer1_ConfigType TIMER1_Config={0,31250,PS_256,CTC};
+		TIMER1_init(&TIMER1_Config);
+		TIMER1_setCallBack(HMI_countTime);
+		LCD_clearScreen();
+		LCD_moveCursor(0,0);
+		while(count!=60)
+		{
+			LCD_displayString("ERROR");
+			LCD_moveCursor(0,0);
+		}
+		count=0;
+		TIMER1_deInit();
+		HMI_displayOpt();
+}
+void HMI_countTime(void)
+{
+	count++;
+}
+int main()
+{
+	SREG|=(1<<7);
+	UART_ConfigType UART_Config={EIGHT_BIT,DISABLED,ONE_BIT,BR_9600};
+	UART_init(&UART_Config);
+	LCD_init();
+	HMI_createPass();
+	while(1)
+	{
+
+	}
+}
+

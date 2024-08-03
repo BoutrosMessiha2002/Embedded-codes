@@ -1,0 +1,16 @@
+/*
+ * CONTROL_ECU.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef CONTROL_ECU_H_
+#define CONTROL_ECU_H_
+#include"std_types.h"
+void Open_door(void);
+void Change_pass(void);
+void Control_selection(uint8 sel);
+
+
+#endif /* CONTROL_ECU_H_ */

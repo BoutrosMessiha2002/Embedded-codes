@@ -1,0 +1,173 @@
+/*
+ * CONTROL_ECU.c
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+#include<avr/io.h>
+#include"lcd.h"
+#include"motor.h"
+#include"uart.h"
+#include"twi.h"
+#include"CONTROL_ECU.h"
+#include"external_eeprom.h"
+#include"timer1.h"
+#include"buzzer.h"
+#include<util/delay.h>
+uint8 sel;
+uint8 count=0;
+static uint8 pass1[5];
+static uint8 pass2[5];
+uint8 check_pass[5];
+uint8 status;
+#define address 0x0000
+void CONTROL_readyToSend(uint8 status)
+{
+	UART_sendByte(CONTROL_READY);
+	while(UART_recieveByte()!=HMI_READY);
+	UART_sendByte(status);
+}
+uint8 CONTROL_readyToRecieve(void)
+{
+	while(UART_recieveByte()!=HMI_READY);
+	UART_sendByte(CONTROL_READY);
+	return UART_recieveByte();
+}
+void CONTROL_Selection(void)
+{
+	LCD_init();
+	sel=CONTROL_readyToRecieve();
+	if (sel==CREATE_PASS)
+		CONTROL_createPass();
+	else if(sel==CREATE_PASS2)
+		CONTROL_createPass2();
+	else if(sel==OPEN_DOOR)
+		CONTROL_openDoorCheckPass();
+	else if(sel==CHANGE_PASS)
+		CONTROL_changePass();
+	else if(sel==OPENING_DOOR)
+		CONTROL_doorOpening();
+	else if(sel==ALERT)
+		CONTROL_alertUser();
+	else if(sel==ALARM)
+		CONTROL_alarm();
+
+}
+void CONTROL_createPass(void)
+{
+    for(uint8 i=0;i<5;i++)
+    {
+    pass1[i]=UART_recieveByte();
+    }
+
+}
+void CONTROL_createPass2(void)
+{
+	for(uint8 i=0;i<5;i++)
+	{
+		pass2[i]=UART_recieveByte();
+	}
+	CONTROL_registerPass(pass1,pass2);
+}
+void CONTROL_registerPass(uint8*pass1,uint8*pass2)
+{
+    status=POSITIVE;
+	for(uint8 j=0;j<5;j++)
+		if(pass1[j]!=pass2[j])
+			status=FAIL;
+	if(status==POSITIVE)
+	for(uint8 j=0;j<5;j++)
+	{
+		EEPROM_writeByte(address+j, pass1[j]);
+		_delay_ms(10);
+	}
+    CONTROL_readyToSend(status);
+}
+void CONTROL_openDoorCheckPass(void)
+{
+for(uint8 j=0;j<5;j++)
+{
+	check_pass[j]=UART_recieveByte();
+}
+CONTROL_checkPass(check_pass);
+}
+void CONTROL_checkPass(uint8*check_pass)
+{
+	uint8 value;
+	status=POSITIVE;
+	for(uint8 j=0;j<5;j++)
+	{
+		EEPROM_readByte(address+j,&value);
+		_delay_ms(10);
+			if(value!=check_pass[j])
+				status=FAIL;
+	}
+	CONTROL_readyToSend(status);
+}
+void CONTROL_changePass(void)
+{
+	for(uint8 j=0;j<5;j++)
+	{
+		check_pass[j]=UART_recieveByte();
+	}
+	CONTROL_checkPass(check_pass);
+}
+void CONTROL_doorOpening(void)
+{
+  Timer1_ConfigType TIMER1_Config={0,31250,PS_256,CTC};
+  TIMER1_init(&TIMER1_Config);
+  TIMER1_setCallBack(CONTROL_countTime);
+  while(count!=15)
+	  DcMotor_Rotate(ACW,100);
+   count=0;
+   while(count!=3)
+   {
+	   DcMotor_Rotate(OFF,0);
+   }
+   count=0;
+   while(count!=15)
+   {
+	   DcMotor_Rotate(CW,100);
+   }
+   count=0;
+   TIMER1_deInit();
+   DcMotor_Rotate(OFF,0);
+}
+void CONTROL_alertUser(void)
+{
+	for(uint8 j=0;j<5;j++)
+	{
+		check_pass[j]=UART_recieveByte();
+	}
+	CONTROL_checkPass(check_pass);
+}
+void CONTROL_alarm(void)
+{
+	Timer1_ConfigType TIMER1_Config={0,31250,PS_256,CTC};
+	  TIMER1_init(&TIMER1_Config);
+	  TIMER1_setCallBack(CONTROL_countTime);
+	  while(count!=60)
+		  BUZZER_on();
+	  BUZZER_off();
+	  TIMER1_deInit();
+	   count=0;
+}
+void CONTROL_countTime(void)
+{
+	count++;
+}
+int main()
+{
+	SREG|=(1<<7);
+	UART_ConfigType UART_Config={EIGHT_BIT,DISABLED,ONE_BIT,BR_9600};
+		UART_init(&UART_Config);
+	TWI_ConfigType TWI_Config={0b00000010,0x20};
+	TWI_init(&TWI_Config);
+	DcMotor_init();
+	BUZZER_init();
+	while(1)
+	{
+	CONTROL_Selection();
+	}
+}
+

@@ -1,0 +1,15 @@
+/*
+ * app.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef APP_H_
+#define APP_H_
+void Recieve_pass(void);
+void Compare_pass(uint8 *pass1,uint8 *pass2);
+void Open_door(void);
+
+
+#endif /* APP_H_ */

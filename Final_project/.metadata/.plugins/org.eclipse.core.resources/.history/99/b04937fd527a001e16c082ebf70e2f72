@@ -1,0 +1,17 @@
+/*
+ * app.h
+ *
+ *  Created on: Nov 3, 2023
+ *      Author: Boutros
+ */
+
+#ifndef APP_H_
+#define APP_H_
+void STEP_1(void);
+void STEP_2(void);
+void STEP_3(void);
+void STEP_4(void);
+void STEP_5(void);
+
+
+#endif /* APP_H_ */

@@ -1,0 +1,141 @@
+/*
+ * app.c
+ *
+ *  Created on: Nov 1, 2023
+ *      Author: Boutros
+ */
+#include"uart.h"
+#include"keypad.h"
+#include"lcd.h"
+#include"app.h"
+#include<util/delay.h>
+#define CONTROL_READY 0x10
+#define DONE 0x01
+#define PROCEED 0x02
+#define REPEAT 0x03
+#define SUCCES 0x04
+#define FAIL 0x05
+uint8 num;
+uint8 pass[5];
+uint8 confirmed_pass[5];
+void STEP_3(void)
+{
+	_delay_ms(200);
+	uint8 ps[5];
+	uint8 i=0;
+		LCD_clearScreen();
+		LCD_displayString("plz enter pass:");
+		LCD_moveCursor(1,0);
+		while(1)
+		{
+			num=KEYPAD_getPressedKey();
+			if(num=='+')
+						break;
+			LCD_intgerToString(num);
+			ps[i]=num;
+			_delay_ms(400);
+		}
+		LCD_clearScreen();
+		UART_sendByte(DONE);
+		while(UART_recieveByte()!=CONTROL_READY);
+			for(i=0;i<5;i++)
+			{
+				UART_sendByte(ps[i]);
+			}
+		while(UART_recieveByte()!=DONE);
+		UART_sendByte(CONTROL_READY)
+		LCD_moveCursor(0,0);
+		if(UART_recieveByte()==SUCCES)
+			while(1)
+		LCD_displayString("Door is unlocking");
+		else if(UART_recieveByte()==FAIL)
+		{
+        while(1)
+        	LCD_displayString("plz enter Pass:");
+		}
+
+}
+void STEP_1(void)
+{
+	uint8 i=0;
+	LCD_clearScreen();
+	LCD_displayString("plz enter pass:");
+	LCD_moveCursor(1,0);
+	while(1)
+	{
+		num=KEYPAD_getPressedKey();
+		if(num=='+')
+					break;
+		LCD_intgerToString(num);
+		pass[i]=num;
+		_delay_ms(400);
+	}
+	_delay_ms(200);
+	UART_sendByte(DONE);
+	while(UART_recieveByte()!=CONTROL_READY);
+	for(int j=0;j<5;j++)
+		UART_sendByte(pass[j]);
+	i=0;
+	LCD_clearScreen();
+	LCD_moveCursor(0,0);
+	LCD_displayString("plz re-enter the");
+	LCD_moveCursor(1,0);
+	LCD_displayString("same pass: ");
+	while(1)
+	{
+		num=KEYPAD_getPressedKey();
+		if(num=='+')
+			break;
+		LCD_intgerToString(num);
+		confirmed_pass[i]=num;
+		_delay_ms(400);
+	}
+	LCD_clearScreen();
+	UART_sendByte(DONE);
+	while(UART_recieveByte()!=CONTROL_READY);
+	for(int j=0;j<5;j++)
+	UART_sendByte(confirmed_pass[j]);
+	while(UART_recieveByte()!=CONTROL_READY);
+	if(UART_recieveByte()==PROCEED)
+	STEP_2();
+	else
+	STEP_1();
+}
+void STEP_2(void)
+{
+	LCD_moveCursor(0,0);
+	LCD_displayString("+ : Open door");
+	LCD_moveCursor(1,0);
+	LCD_displayString("- : change pass");
+	while(1)
+	{
+		num=KEYPAD_getPressedKey();
+		if(num=='-')
+		{
+			LCD_clearScreen();
+			STEP_4();
+		}
+		else if(num=='+')
+		{
+			LCD_clearScreen();
+			STEP_3();
+		}
+	}
+}
+void STEP_4(void)
+{
+
+}
+int main()
+{
+UART_ConfigType UART_configu ={
+		EIGHT_BIT,DISABLED,ONE_BIT,9600
+};
+UART_init(&UART_configu);
+LCD_init();
+while(1)
+{
+	STEP_1();
+}
+}
+

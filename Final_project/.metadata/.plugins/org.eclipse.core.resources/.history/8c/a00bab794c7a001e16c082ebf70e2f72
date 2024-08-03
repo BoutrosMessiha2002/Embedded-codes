@@ -1,0 +1,92 @@
+/*
+ * app.c
+ *
+ *  Created on: Nov 1, 2023
+ *      Author: Boutros
+ */
+#include"uart.h"
+#include"twi.h"
+#include"external_eeprom.h"
+#include"motor.h"
+#include"app.h"
+#define CONTROL_READY 0x10
+#define DONE 0x01
+#define PROCEED 0x02
+#define REPEAT 0x03
+#define SUCCES 0x04
+#define FAIL 0x05
+#define HMI_READY 0x06
+uint8 pass1[5];
+uint8 pass2[5];
+uint8 check_pass[5];
+uint8 val=0;
+void Open_door(void)
+{
+	uint8 check=0;
+	uint8 i=0;
+	UART_sendByte(CONTROL_READY);
+	while(UART_recieveByte()!=DONE)
+	{
+	check_pass[i]=UART_recieveByte();
+	i++;
+	}
+	uint8 status = SUCCES;
+	for(int j=0;j<5;j++)
+	{
+		if(pass1[j]!=check_pass[j])
+		{
+			status=FAIL;
+			break;
+		}
+	}
+	UART_sendByte(DONE);
+	while(UART_recieveByte()!=HMI_READY);
+	 UART_sendByte(status);
+
+}
+void Recieve_pass(void)
+{
+	while(UART_recieveByte()!=DONE);
+	UART_sendByte(CONTROL_READY);
+	for (int i=0;i<5;i++)
+	pass1[i]=UART_recieveByte();
+	while(UART_recieveByte()!=DONE);
+	UART_sendByte(CONTROL_READY);
+	for(int j=0;j<5;j++)
+	pass2[j]=UART_recieveByte();
+Compare_pass(pass1,pass2);
+}
+void Compare_pass(uint8 *pass1,uint8 *pass2)
+{
+	int check=0;
+	for(int i=0;i<5;i++)
+		if(pass1[i]==pass2[i])
+			check++;
+	UART_sendByte(DONE);
+	while(UART_recieveByte()!=HMI_READY);
+	if(check==5)
+	{
+	   for(int j=0;j<5;j++)
+	   EEPROM_writeByte(0x0311+j,pass1[j]);
+	   UART_sendByte(PROCEED);
+	   Open_door();
+	}
+	else
+		   UART_sendByte(REPEAT);
+	check=0;
+}
+int main()
+{
+	UART_ConfigType UART_configu ={
+			EIGHT_BIT,DISABLED,ONE_BIT,9600
+	};
+	UART_init(&UART_configu);
+	TWI_ConfigType TWI_configu={
+			0b00000010,PS_1
+	};
+	TWI_init(&TWI_configu);
+while(1)
+{
+Recieve_pass();
+}
+}
